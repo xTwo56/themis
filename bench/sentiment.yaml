@@ -1,0 +1,22 @@
+name: sentiment-classification-v1
+
+models:
+  - qwen2.5:0.5b
+  - llama3.2:1b
+
+prompt_template: |
+  Classify the sentiment as positive, negative, or neutral.
+  Return only the label.
+  Text: {input}
+
+generation:
+  temperature: 0
+  max_output_tokens: 8
+  context_length: 4096
+
+execution:
+  warmup_runs: 1
+  repetitions: 3
+
+dataset: datasets/sentiment.jsonl
+scorer: classification

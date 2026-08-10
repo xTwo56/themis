@@ -17,12 +17,12 @@ PROMPT = (
     "Text: im the dummest of all dumasses"
 )
 
-
+# pyadantic model enforces type validation
 class ModelMeasurement(BaseModel):
     model_config = ConfigDict(
-        strict=True,
+        strict=True,  # stricter bcuz now it wont accept "3" 
         extra="forbid",
-    )
+    ) 
 
     model_name: str = Field(min_length=1)
     repetition: int = Field(ge=1)
@@ -39,6 +39,8 @@ class ModelMeasurement(BaseModel):
 
     raw_response: dict[str, Any]
 
+    # @property is a decorator which turns a method into an attribute like computed value therefore you access it like a field not call it like a method
+    # oh i remember nishchay using a decorator back in 1st year
     @property
     def prompt_tokens_per_second(self) -> float | None:
         if self.prompt_duration_ns == 0:
@@ -48,7 +50,6 @@ class ModelMeasurement(BaseModel):
             self.prompt_duration_ns / 1_000_000_000
         )
 
-
     @property
     def output_tokens_per_second(self) -> float | None:
         if self.output_duration_ns == 0:
@@ -57,6 +58,7 @@ class ModelMeasurement(BaseModel):
         return self.output_token_count / (
             self.output_duration_ns / 1_000_000_000
         )
+
 def run_model(
     client: httpx.Client,
     model: str,
@@ -109,7 +111,6 @@ def format_rate(rate: float | None) -> str:
         return "n/a"
 
     return f"{rate:.1f} tokens/s"
-
 
 def print_measurement(measurement: ModelMeasurement) -> None:
     print(f"\nrepetition: {measurement.repetition}")
@@ -169,27 +170,31 @@ def print_comparison(measurements: list[ModelMeasurement]) -> None:
         print(f"median prompt speed: {median_prompt_speed:.1f} tokens/s")
         print(f"median output speed: {median_output_speed:.1f} tokens/s")
 
-measurements: list[ModelMeasurement] = []
 
-with httpx.Client(timeout=60.0) as client:
-    health_response = client.get(
-        "http://127.0.0.1:11434/api/version"
-    )
-    health_response.raise_for_status()
+def main() -> None:
+    measurements: list[ModelMeasurement] = []
 
-    for model in MODELS:
-        for repetition in range(1, 4):
-            measurement = run_model(
-                client,
-                model,
-                repetition,
-            )
-            measurements.append(measurement)
+    with httpx.Client(timeout=60.0) as client:
+        health_response = client.get(
+            "http://127.0.0.1:11434/api/version"
+        )
+        health_response.raise_for_status()
 
-print(f"\nrecorded measurements: {len(measurements)}")
+        for model in MODELS:
+            for repetition in range(1, 4):
+                measurement = run_model(
+                    client,
+                    model,
+                    repetition,
+                )
+                measurements.append(measurement)
 
-for measurement in measurements:
-    print_measurement(measurement)
+    print(f"\nrecorded measurements: {len(measurements)}")
 
-print_comparison(measurements)
+    for measurement in measurements:
+        print_measurement(measurement)
 
+    print_comparison(measurements)
+
+if __name__ == "__main__":
+    main()

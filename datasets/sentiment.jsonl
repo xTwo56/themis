@@ -1,0 +1,3 @@
+{"id":"sentiment-001","input":"i know this life is bad for me, but atleast, bitch, i'll admit it.","expected":"negative"}
+{"id":"sentiment-002","input":"i dont waste my time on none this shit. i pop, shove it, bitch, kick it.","expected":"neutral"}
+{"id":"sentiment-003","input":"i fucked my money up, and now its pregnant with some triplets.","expected":"positive"}
