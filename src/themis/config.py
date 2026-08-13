@@ -3,7 +3,7 @@ from pathlib import Path
 from typing import Any, Literal
 
 import yaml
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, RootModel, model_validator
 
 
 class StrictModel(BaseModel):
@@ -34,10 +34,20 @@ class BenchmarkSpec(StrictModel):
     scorer: Literal["classification"]
 
 
-class ClassificationCase(StrictModel):
+class BenchmarkCase(StrictModel):
     id: str = Field(min_length=1)
     input: str = Field(min_length=1)
-    expected: Literal["positive", "negative", "neutral"]
+    expected: str = Field(min_length=1)
+
+
+class BenchmarkDataset(RootModel[list[BenchmarkCase]]):
+    @model_validator(mode="after")
+    def case_ids_are_unique(self) -> "BenchmarkDataset":
+        case_ids = [case.id for case in self.root]
+        if len(case_ids) != len(set(case_ids)):
+            raise ValueError("benchmark case IDs must be unique")
+
+        return self
 
 
 def load_benchmark(path: Path) -> BenchmarkSpec:
@@ -47,8 +57,8 @@ def load_benchmark(path: Path) -> BenchmarkSpec:
     return BenchmarkSpec.model_validate(document)
 
 
-def load_dataset(path: Path) -> list[ClassificationCase]:
-    records: list[ClassificationRecord] = []
+def load_dataset(path: Path) -> list[BenchmarkCase]:
+    cases: list[BenchmarkCase] = []
 
     with path.open(encoding="utf-8") as file:
         for line in file:
@@ -56,7 +66,7 @@ def load_dataset(path: Path) -> list[ClassificationCase]:
                 continue
 
             document: Any = json.loads(line)
-            case = ClassificationCase.model_validate(document)
-            records.append(case)
+            case = BenchmarkCase.model_validate(document)
+            cases.append(case)
 
-    return records
+    return BenchmarkDataset.model_validate(cases).root
