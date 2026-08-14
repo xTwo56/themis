@@ -8,9 +8,9 @@ from themis.runner import (
     ModelMeasurement,
     ModelPerformanceSummary,
     ModelQualitySummary,
-    run_benchmark_file,
+    export_benchmark_result,
+    run_benchmark,
 )
-
 
 BENCHMARK_PATH = Path("bench/sentiment.yaml")
 
@@ -42,18 +42,14 @@ def print_quality_summary(summary: ModelQualitySummary) -> None:
 
 
 def format_duration_statistics(statistics: MetricStatistics) -> str:
-    return (
-        f"mean={statistics.mean / 1e9:.3f} s, "
-        f"median={statistics.median / 1e9:.3f} s"
-    )
+    return f"mean={statistics.mean / 1e9:.3f} s, median={statistics.median / 1e9:.3f} s"
 
 
 def format_rate_statistics(statistics: MetricStatistics | None) -> str:
     if statistics is None:
         return "n/a"
     return (
-        f"mean={statistics.mean:.1f} tokens/s, "
-        f"median={statistics.median:.1f} tokens/s"
+        f"mean={statistics.mean:.1f} tokens/s, median={statistics.median:.1f} tokens/s"
     )
 
 
@@ -63,21 +59,16 @@ def print_performance_summary(summary: ModelPerformanceSummary) -> None:
     print(f"client duration: {format_duration_statistics(summary.client_duration_ns)}")
     print(f"Ollama duration: {format_duration_statistics(summary.ollama_duration_ns)}")
     print(f"load duration: {format_duration_statistics(summary.load_duration_ns)}")
-    print(
-        "prompt speed: "
-        f"{format_rate_statistics(summary.prompt_tokens_per_second)}"
-    )
-    print(
-        "output speed: "
-        f"{format_rate_statistics(summary.output_tokens_per_second)}"
-    )
+    print(f"prompt speed: {format_rate_statistics(summary.prompt_tokens_per_second)}")
+    print(f"output speed: {format_rate_statistics(summary.output_tokens_per_second)}")
 
 
 def main() -> None:
     with httpx.Client(timeout=60.0) as client:
         health_response = client.get(OLLAMA_VERSION_URL)
         health_response.raise_for_status()
-        result = run_benchmark_file(client, BENCHMARK_PATH)
+        result = run_benchmark(client, BENCHMARK_PATH)
+        export_benchmark_result(result)
 
     print(f"\nrecorded measurements: {len(result.measurements)}")
     for measurement in result.measurements:

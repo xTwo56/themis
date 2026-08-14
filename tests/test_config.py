@@ -59,12 +59,8 @@ def test_load_dataset_returns_valid_cases(tmp_path: Path) -> None:
     dataset_path = tmp_path / "dataset.jsonl"
 
     dataset_path.write_text(
-        "\n".join(
-            [
-                '{"id":"case-001","input":"It arrived.","expected":"neutral"}',
-                '{"id":"case-002","input":"I love it.","expected":"positive"}',
-            ]
-        ),
+        '{"id":"case-001","input":"It arrived.","expected":"neutral"}\n'
+        '{"id":"case-002","input":"I love it.","expected":"positive"}',
         encoding="utf-8",
     )
 
@@ -105,12 +101,8 @@ def test_load_dataset_rejects_malformed_cases(
 def test_load_dataset_rejects_duplicate_case_ids(tmp_path: Path) -> None:
     dataset_path = tmp_path / "dataset.jsonl"
     dataset_path.write_text(
-        "\n".join(
-            [
-                '{"id":"case-001","input":"First","expected":"yes"}',
-                '{"id":"case-001","input":"Second","expected":"no"}',
-            ]
-        ),
+        '{"id":"case-001","input":"First","expected":"yes"}\n'
+        '{"id":"case-001","input":"Second","expected":"no"}',
         encoding="utf-8",
     )
 

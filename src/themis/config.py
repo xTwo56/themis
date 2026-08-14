@@ -40,6 +40,8 @@ class BenchmarkCase(StrictModel):
     expected: str = Field(min_length=1)
 
 
+# we need a seprate class when we have a rule to enforce
+# here the uniquesness of case_ids
 class BenchmarkDataset(RootModel[list[BenchmarkCase]]):
     @model_validator(mode="after")
     def case_ids_are_unique(self) -> "BenchmarkDataset":

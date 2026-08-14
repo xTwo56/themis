@@ -1,10 +1,11 @@
 import time
 from collections import defaultdict
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from statistics import mean, median
-from typing import Any, Protocol
+from typing import Any, Literal, Protocol
 
-from pydantic import Field
+from pydantic import Field, field_validator, model_validator
 
 from themis.config import (
     BenchmarkCase,
@@ -15,11 +16,11 @@ from themis.config import (
 )
 from themis.scoring import score_classification_response
 
-
 OLLAMA_GENERATE_URL = "http://127.0.0.1:11434/api/generate"
 OLLAMA_VERSION_URL = "http://127.0.0.1:11434/api/version"
 
 
+# measures individual case for a model
 class ModelMeasurement(StrictModel):
     model_name: str = Field(min_length=1)
     case_id: str = Field(min_length=1)
@@ -51,6 +52,7 @@ class ModelMeasurement(StrictModel):
         return self.output_token_count / (self.output_duration_ns / 1_000_000_000)
 
 
+# correctness
 class ModelQualitySummary(StrictModel):
     model_name: str = Field(min_length=1)
     evaluated_run_count: int = Field(ge=0)
@@ -63,6 +65,7 @@ class MetricStatistics(StrictModel):
     median: float
 
 
+# efficiency
 class ModelPerformanceSummary(StrictModel):
     model_name: str = Field(min_length=1)
     measured_run_count: int = Field(ge=0)
@@ -73,12 +76,32 @@ class ModelPerformanceSummary(StrictModel):
     output_tokens_per_second: MetricStatistics | None
 
 
+# measures complete execution (all models, all cases, all repetitions)
 class BenchmarkResult(StrictModel):
+    schema_version: Literal["1.0"]
+    started_at: datetime
+    ended_at: datetime
+    benchmark_spec: BenchmarkSpec
+    cases: list[BenchmarkCase]
     measurements: list[ModelMeasurement]
     quality_summaries: list[ModelQualitySummary]
     performance_summaries: list[ModelPerformanceSummary]
 
+    @field_validator("started_at", "ended_at")
+    @classmethod
+    def timestamps_are_utc(cls, value: datetime) -> datetime:
+        if value.tzinfo is None or value.utcoffset() != timedelta(0):
+            raise ValueError("benchmark timestamps must be timezone-aware UTC")
+        return value
 
+    @model_validator(mode="after")
+    def timestamps_are_ordered(self) -> "BenchmarkResult":
+        if self.ended_at < self.started_at:
+            raise ValueError("benchmark end timestamp cannot precede start timestamp")
+        return self
+
+
+# protocol defines an interface by listing the methods an object must implement (smth like traits)
 class Response(Protocol):
     def raise_for_status(self) -> None: ...
 
@@ -226,16 +249,10 @@ def aggregate_performance(
                     [item.load_duration_ns for item in model_measurements]
                 ),
                 prompt_tokens_per_second=_optional_metric_statistics(
-                    [
-                        item.prompt_tokens_per_second
-                        for item in model_measurements
-                    ]
+                    [item.prompt_tokens_per_second for item in model_measurements]
                 ),
                 output_tokens_per_second=_optional_metric_statistics(
-                    [
-                        item.output_tokens_per_second
-                        for item in model_measurements
-                    ]
+                    [item.output_tokens_per_second for item in model_measurements]
                 ),
             )
         )
@@ -243,15 +260,32 @@ def aggregate_performance(
     return summaries
 
 
-def run_benchmark_file(
+def run_benchmark(
     client: HttpClient,
     benchmark_path: Path,
 ) -> BenchmarkResult:
+    started_at = datetime.now(UTC)
     benchmark = load_benchmark(benchmark_path)
     cases = load_dataset(Path(benchmark.dataset))
     measurements = execute_benchmark(client, benchmark, cases)
     return BenchmarkResult(
+        schema_version="1.0",
+        started_at=started_at,
+        ended_at=datetime.now(UTC),
+        benchmark_spec=benchmark,
+        cases=cases,
         measurements=measurements,
         quality_summaries=aggregate_quality(measurements),
         performance_summaries=aggregate_performance(measurements),
     )
+
+
+def export_benchmark_result(
+    result: BenchmarkResult,
+    results_directory: Path = Path("results"),
+) -> Path:
+    results_directory.mkdir(parents=True, exist_ok=True)
+    timestamp = result.ended_at.strftime("%Y%m%dT%H%M%S%fZ")
+    output_path = results_directory / f"{result.benchmark_spec.name}-{timestamp}.json"
+    output_path.write_text(result.model_dump_json(indent=2), encoding="utf-8")
+    return output_path

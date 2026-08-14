@@ -2,7 +2,6 @@ from pathlib import Path
 
 from themis.config import load_benchmark, load_dataset
 
-
 BENCHMARK_PATH = Path("bench/sentiment.yaml")
 
 
